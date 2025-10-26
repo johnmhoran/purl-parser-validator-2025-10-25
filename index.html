@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PURL Parser & Validator</title>
+    <title>PURL Parser & Validator - Enhanced</title>
     <style>
         * {
             margin: 0;
@@ -19,7 +19,7 @@
         }
         
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
         }
         
@@ -37,6 +37,15 @@
         .header p {
             font-size: 1.1em;
             opacity: 0.9;
+        }
+        
+        .version-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-top: 10px;
         }
         
         .card {
@@ -109,6 +118,45 @@
             border-radius: 6px;
             color: #363;
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            color: #856404;
+            margin-bottom: 15px;
+        }
+        
+        .warning-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .warning-list {
+            margin-left: 20px;
+            margin-top: 8px;
+        }
+        
+        .validation-level {
+            font-size: 0.85em;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .validation-enhanced {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .validation-basic {
+            background: #d1ecf1;
+            color: #0c5460;
         }
         
         .component {
@@ -136,6 +184,13 @@
         
         .component-empty {
             color: #999;
+            font-style: italic;
+        }
+        
+        .component-note {
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: #666;
             font-style: italic;
         }
         
@@ -192,7 +247,8 @@
     <div class="container">
         <div class="header">
             <h1>📦 PURL Parser & Validator</h1>
-            <p>Parse and validate Package URLs (PURL) according to the purl-spec standard</p>
+            <p>Parse and validate Package URLs (PURL) with type-specific validation</p>
+            <div class="version-badge">Enhanced with PyPI validation</div>
         </div>
         
         <div class="card">
@@ -201,16 +257,16 @@
                 <input 
                     type="text" 
                     id="purlInput" 
-                    placeholder="pkg:npm/express@4.17.1"
+                    placeholder="pkg:pypi/django@3.2.0"
                     autocomplete="off"
                 />
                 <div class="examples">
-                    Try: 
-                    <span class="example-link" onclick="loadExample('pkg:npm/express@4.17.1')">npm</span>
-                    <span class="example-link" onclick="loadExample('pkg:pypi/django@3.2.0')">pypi</span>
-                    <span class="example-link" onclick="loadExample('pkg:maven/org.apache.commons/commons-lang3@3.12.0')">maven</span>
-                    <span class="example-link" onclick="loadExample('pkg:docker/library/nginx@1.21.0?arch=amd64')">docker</span>
-                    <span class="example-link" onclick="loadExample('pkg:github/package-url/purl-spec@244fd47e07d1004')">github</span>
+                    Try PyPI: 
+                    <span class="example-link" onclick="loadExample('pkg:pypi/django@3.2.0')">django</span>
+                    <span class="example-link" onclick="loadExample('pkg:pypi/requests@2.28.1')">requests</span>
+                    <span class="example-link" onclick="loadExample('pkg:pypi/Flask-SQLAlchemy@2.5.1')">Flask-SQLAlchemy</span>
+                    <span class="example-link" onclick="loadExample('pkg:pypi/numpy@1.23.0?extension=tar.gz')">with qualifier</span>
+                    <span class="example-link" onclick="loadExample('pkg:pypi/Django/admin@3.2.0')">⚠️ invalid</span>
                 </div>
             </div>
             
@@ -223,6 +279,57 @@
     </div>
 
     <script>
+        // PyPI-specific validation rules
+        function validatePyPI(parsed) {
+            const warnings = [];
+            
+            // PyPI doesn't use namespace
+            if (parsed.namespace) {
+                warnings.push('PyPI packages should not have a namespace. The namespace will be ignored.');
+            }
+            
+            // PyPI package names should be normalized (lowercase, hyphens instead of underscores)
+            const name = parsed.name;
+            const normalizedName = name.toLowerCase().replace(/_/g, '-');
+            
+            if (name !== normalizedName) {
+                warnings.push(`PyPI package names should be normalized. Suggested: "${normalizedName}"`);
+            }
+            
+            // Check for uppercase in name
+            if (name !== name.toLowerCase()) {
+                warnings.push('PyPI package names are case-insensitive and typically lowercase.');
+            }
+            
+            // Version format check (basic PEP 440 validation)
+            if (parsed.version) {
+                const validVersionPattern = /^(\d+!)?\d+(\.\d+)*((a|alpha|b|beta|rc|c|pre|preview)\d+)?(\.post\d+)?(\.dev\d+)?$/i;
+                if (!validVersionPattern.test(parsed.version)) {
+                    warnings.push('Version format may not comply with PEP 440 standard.');
+                }
+            }
+            
+            // Check qualifiers
+            if (parsed.qualifiers) {
+                const validPyPIQualifiers = ['extension', 'repository_url'];
+                for (const key of Object.keys(parsed.qualifiers)) {
+                    if (!validPyPIQualifiers.includes(key)) {
+                        warnings.push(`Qualifier "${key}" is not commonly used in PyPI PURLs. Valid qualifiers: ${validPyPIQualifiers.join(', ')}`);
+                    }
+                }
+                
+                // Check extension qualifier
+                if (parsed.qualifiers.extension) {
+                    const validExtensions = ['tar.gz', 'whl', 'egg', 'zip'];
+                    if (!validExtensions.includes(parsed.qualifiers.extension)) {
+                        warnings.push(`Extension "${parsed.qualifiers.extension}" is uncommon. Typical extensions: ${validExtensions.join(', ')}`);
+                    }
+                }
+            }
+            
+            return warnings;
+        }
+        
         function parsePURL(purl) {
             // Basic PURL regex pattern
             const purlPattern = /^pkg:([^\/]+)\/(.+)$/;
@@ -237,7 +344,7 @@
             
             const match = purl.match(purlPattern);
             if (!match) {
-                return { error: 'Invalid PURL format. Expected: pkg:type/namespace/name@version' };
+                return { error: 'Invalid PURL format. Expected: pkg:type/name@version' };
             }
             
             const type = match[1].toLowerCase();
@@ -284,7 +391,7 @@
                 name = parts[0];
             }
             
-            return {
+            const parsed = {
                 valid: true,
                 type,
                 namespace: namespace || null,
@@ -293,6 +400,16 @@
                 qualifiers: Object.keys(qualifiers).length > 0 ? qualifiers : null,
                 subpath: subpath || null
             };
+            
+            // Add type-specific validation
+            if (type === 'pypi') {
+                parsed.warnings = validatePyPI(parsed);
+                parsed.validationLevel = 'enhanced';
+            } else {
+                parsed.validationLevel = 'basic';
+            }
+            
+            return parsed;
         }
         
         function getRepositoryLink(parsed) {
@@ -323,7 +440,25 @@
             
             const repoLink = getRepositoryLink(parsed);
             
-            let html = '<div class="success"><strong>✓ Valid PURL</strong></div>';
+            let html = `
+                <div class="success">
+                    <span><strong>✓ Valid PURL</strong></span>
+                    <span class="validation-level validation-${parsed.validationLevel}">
+                        ${parsed.validationLevel === 'enhanced' ? '🔍 Enhanced Validation' : 'Basic Validation'}
+                    </span>
+                </div>
+            `;
+            
+            // Show warnings if any
+            if (parsed.warnings && parsed.warnings.length > 0) {
+                html += '<div class="warning">';
+                html += '<div class="warning-title">⚠️ Validation Warnings:</div>';
+                html += '<div class="warning-list">';
+                parsed.warnings.forEach(warning => {
+                    html += `<div>• ${warning}</div>`;
+                });
+                html += '</div></div>';
+            }
             
             html += `
                 <div class="component">
@@ -334,6 +469,7 @@
                 <div class="component">
                     <div class="component-label">Type</div>
                     <div class="component-value">${parsed.type}</div>
+                    ${parsed.type === 'pypi' ? '<div class="component-note">✓ PyPI-specific validation enabled</div>' : ''}
                 </div>
             `;
             
@@ -342,6 +478,7 @@
                     <div class="component">
                         <div class="component-label">Namespace</div>
                         <div class="component-value">${parsed.namespace}</div>
+                        ${parsed.type === 'pypi' ? '<div class="component-note">⚠️ PyPI typically does not use namespaces</div>' : ''}
                     </div>
                 `;
             }
@@ -350,6 +487,7 @@
                 <div class="component">
                     <div class="component-label">Name</div>
                     <div class="component-value">${parsed.name}</div>
+                    ${parsed.type === 'pypi' ? '<div class="component-note">PyPI names are case-insensitive and normalized</div>' : ''}
                 </div>
             `;
             
@@ -358,6 +496,7 @@
                     <div class="component">
                         <div class="component-label">Version</div>
                         <div class="component-value">${parsed.version}</div>
+                        ${parsed.type === 'pypi' ? '<div class="component-note">Should follow PEP 440 versioning standard</div>' : ''}
                     </div>
                 `;
             }
@@ -373,6 +512,7 @@
                     <div class="component">
                         <div class="component-label">Qualifiers</div>
                         ${qualifiersHtml}
+                        ${parsed.type === 'pypi' ? '<div class="component-note">Common: extension (tar.gz, whl, egg), repository_url</div>' : ''}
                     </div>
                 `;
             }
@@ -407,13 +547,15 @@
         // Real-time parsing
         document.getElementById('purlInput').addEventListener('input', (e) => {
             const purl = e.target.value;
-            const parsed = parsePURL(purl);
-            displayResult(parsed);
+            if (purl.trim()) {
+                const parsed = parsePURL(purl);
+                displayResult(parsed);
+            }
         });
         
         // Load first example on page load
         window.addEventListener('load', () => {
-            loadExample('pkg:npm/express@4.17.1');
+            loadExample('pkg:pypi/django@3.2.0');
         });
     </script>
 </body>
